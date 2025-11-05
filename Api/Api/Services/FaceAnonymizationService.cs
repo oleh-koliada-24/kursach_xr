@@ -265,14 +265,5 @@ namespace Api.Services
                 Console.WriteLine($"Error blacking out face: {ex.Message}");
             }
         }
-
-        public void Dispose()
-        {
-            foreach (var cascade in _faceCascades)
-            {
-                cascade?.Dispose();
-            }
-            _faceCascades.Clear();
-        }
     }
 }
