@@ -10,6 +10,8 @@ namespace Api
             var builder = WebApplication.CreateBuilder(args);
 
             builder.Services.AddControllers();
+            builder.Services.AddScoped<Api.Services.IFaceAnonymizationService, Api.Services.FaceAnonymizationService>();
+            
             builder.Services.AddCors(options =>
             {
                 options.AddDefaultPolicy(policy =>

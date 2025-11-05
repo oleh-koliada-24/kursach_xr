@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Api.Services;
 
 namespace Api.Controllers
 {
@@ -6,9 +7,11 @@ namespace Api.Controllers
     [ApiController]
     public class AnonymizationController : ControllerBase
     {
-        public AnonymizationController()
-        {
+        private readonly IFaceAnonymizationService _faceAnonymizationService;
 
+        public AnonymizationController(IFaceAnonymizationService faceAnonymizationService)
+        {
+            _faceAnonymizationService = faceAnonymizationService;
         }
 
         [HttpPost("anonymization")]
@@ -36,20 +39,15 @@ namespace Api.Controllers
                 await image.CopyToAsync(memoryStream);
                 byte[] imageBytes = memoryStream.ToArray();
 
-                byte[] anonymizedImageBytes = await AnonymizeImageBytes(imageBytes);
+                // Використовуємо сервіс для анонімізації облич
+                byte[] anonymizedImageBytes = await _faceAnonymizationService.AnonymizeFacesAsync(imageBytes);
 
-                return File(anonymizedImageBytes, image.ContentType);
+                return File(anonymizedImageBytes, "image/jpeg");
             }
             catch (Exception)
             {
                 return StatusCode(500, "Internal server error while processing image");
             }
-        }
-
-        private async Task<byte[]> AnonymizeImageBytes(byte[] imageBytes)
-        {
-            await Task.Delay(1000);
-            return imageBytes;
         }
     }
 }
