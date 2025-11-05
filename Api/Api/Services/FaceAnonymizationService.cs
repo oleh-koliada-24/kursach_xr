@@ -1,10 +1,11 @@
+using Api.DTOs;
 using OpenCvSharp;
 
 namespace Api.Services
 {
     public interface IFaceAnonymizationService
     {
-        Task<byte[]> AnonymizeFacesAsync(byte[] imageBytes);
+        Task<byte[]> AnonymizeFacesAsync(byte[] imageBytes, AnonymizationType anonymizationType);
     }
 
     public class FaceAnonymizationService : IFaceAnonymizationService
@@ -50,15 +51,15 @@ namespace Api.Services
             Console.WriteLine($"Loaded {_faceCascades.Count} cascade classifiers");
         }
 
-        public async Task<byte[]> AnonymizeFacesAsync(byte[] imageBytes)
+        public async Task<byte[]> AnonymizeFacesAsync(byte[] imageBytes, AnonymizationType anonymizationType)
         {
             return await Task.Run(() =>
             {
-                return AnonymizeFaces(imageBytes);
+                return AnonymizeFaces(imageBytes, anonymizationType);
             });
         }
 
-        public byte[] AnonymizeFaces(byte[] imageBytes)
+        public byte[] AnonymizeFaces(byte[] imageBytes, AnonymizationType anonymizationType)
         {
             try
             {
@@ -75,7 +76,7 @@ namespace Api.Services
                 // Анонімізуємо кожне обличчя
                 foreach (var face in faces)
                 {
-                    AnonymizeFace(mat, face);
+                    AnonymizeFace(mat, face, anonymizationType);
                 }
 
                 // Конвертуємо назад в байти
@@ -123,7 +124,7 @@ namespace Api.Services
                             scaleFactor: 1.1,           // Коефіцієнт масштабування
                             minNeighbors: 3,            // Мінімальна кількість сусідів
                             flags: HaarDetectionTypes.ScaleImage,
-                            minSize: new Size(10, 10),  // Мінімальний розмір обличчя
+                            minSize: new Size(30, 30),  // Мінімальний розмір обличчя
                             maxSize: new Size(700, 700) // Максимальний розмір обличчя
                         );
                         
@@ -189,16 +190,23 @@ namespace Api.Services
             return uniqueFaces;
         }
 
-        private void AnonymizeFace(Mat image, Rect faceRect)
+        private void AnonymizeFace(Mat image, Rect faceRect, AnonymizationType anonymizationType)
         {
-            // Метод 1: Розмиття обличчя
-            BlurFace(image, faceRect);
-            
-            // Метод 2: Піксельація (коментар, щоб використати тільки один)
-            // PixelateFace(image, faceRect);
-            
-            // Метод 3: Чорний прямокутник (коментар)
-            // BlackoutFace(image, faceRect);
+            switch (anonymizationType)
+            {
+                case AnonymizationType.Blur:
+                    BlurFace(image, faceRect);
+                    break;
+                case AnonymizationType.Pixelate:
+                    PixelateFace(image, faceRect);
+                    break;
+                case AnonymizationType.Blackout:
+                    BlackoutFace(image, faceRect);
+                    break;
+                default:
+                    BlurFace(image, faceRect);
+                    break;
+            }
         }
 
         private void BlurFace(Mat image, Rect faceRect)

@@ -5,10 +5,19 @@ import axios from "axios";
 const url = 'http://localhost:5245/api/';
 const noImagePlaceholder = "src/assets/no-image-placeholder.png";
 
+const AnonymizationType = {
+  Blur: 0,
+  Pixelate: 1,
+  Blackout: 2
+} as const;
+
+type AnonymizationTypeValue = typeof AnonymizationType[keyof typeof AnonymizationType];
+
 function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [anonymizedPictureSrc, setAnonymizedPictureSrc] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [anonymizationType, setAnonymizationType] = useState<AnonymizationTypeValue>(AnonymizationType.Blur);
 
   const anonymizePicture = async () => {
     if (!selectedFile) {
@@ -21,6 +30,7 @@ function App() {
     try {
       const formData = new FormData();
       formData.append('image', selectedFile);
+      formData.append('type', anonymizationType.toString());
 
       const response = await axios.post(`${url}anonymization`, formData, {
         headers: {
@@ -66,7 +76,23 @@ function App() {
           />
       </Card>
 
-      <div className="d-flex align-items-center">→</div>
+      <div className="d-flex flex-column align-items-center gap-3">
+        <div className="fs-2">→</div>
+        <div className="text-center">
+          <Form.Label className="fw-bold mb-2">Select Anonymization Method</Form.Label>
+          <Form.Select 
+            value={anonymizationType} 
+            onChange={(e) => {
+              setAnonymizationType(parseInt(e.target.value) as AnonymizationTypeValue);
+              setAnonymizedPictureSrc("");
+            }}
+          >
+            <option value={AnonymizationType.Blur}>Blur</option>
+            <option value={AnonymizationType.Pixelate}>Pixelate</option>
+            <option value={AnonymizationType.Blackout}>Blackout</option>
+          </Form.Select>
+        </div>
+      </div>
 
       <Card className="p-3 d-flex flex-column align-items-center">
         <Card.Img 
@@ -86,7 +112,7 @@ function App() {
               Anonymizing...
             </>
           ) : (
-            'Anonymize Picture'
+            `Anonymize with ${Object.keys(AnonymizationType)[Object.values(AnonymizationType).indexOf(anonymizationType)]}`
           )}
         </Button>
       </Card>

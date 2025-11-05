@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Api.Services;
+using Api.DTOs;
 
 namespace Api.Controllers
 {
@@ -15,8 +16,10 @@ namespace Api.Controllers
         }
 
         [HttpPost("anonymization")]
-        public async Task<IActionResult> AnonymizeImage(IFormFile image)
+        public async Task<IActionResult> AnonymizeImage(AnonymizationDTO dto)
         {
+            var image = dto.Image;
+
             if (image == null || image.Length == 0)
             {
                 return BadRequest("No image file provided");
@@ -40,7 +43,7 @@ namespace Api.Controllers
                 byte[] imageBytes = memoryStream.ToArray();
 
                 // Використовуємо сервіс для анонімізації облич
-                byte[] anonymizedImageBytes = await _faceAnonymizationService.AnonymizeFacesAsync(imageBytes);
+                byte[] anonymizedImageBytes = await _faceAnonymizationService.AnonymizeFacesAsync(imageBytes, dto.Type);
 
                 return File(anonymizedImageBytes, "image/jpeg");
             }
