@@ -5,7 +5,7 @@ namespace Api.Services
 {
     public interface IFaceAnonymizationService
     {
-        Task<byte[]> AnonymizeFacesAsync(byte[] imageBytes, AnonymizationType anonymizationType);
+        byte[] AnonymizeFaces(byte[] imageBytes, AnonymizationType anonymizationType);
     }
 
     public class FaceAnonymizationService : IFaceAnonymizationService
@@ -13,17 +13,16 @@ namespace Api.Services
         private readonly List<CascadeClassifier> _faceCascades;
         private readonly string[] _cascadeFiles = new[]
         {
-            "haarcascade_frontalface_alt.xml",      // Фронтальні обличчя (альтернативний)
-            "haarcascade_frontalface_default.xml",  // Фронтальні обличчя (стандартний)
-            "haarcascade_frontalface_alt2.xml",     // Фронтальні обличчя (варіант 2)
-            "haarcascade_profileface.xml"           // Профільні обличчя
+            "haarcascade_frontalface_alt.xml",
+            "haarcascade_frontalface_default.xml",
+            "haarcascade_frontalface_alt2.xml",
+            "haarcascade_profileface.xml"
         };
 
         public FaceAnonymizationService()
         {
             _faceCascades = new List<CascadeClassifier>();
             
-            // Завантажуємо всі доступні каскади
             var modelsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Models");
             
             foreach (var cascadeFile in _cascadeFiles)
@@ -51,42 +50,27 @@ namespace Api.Services
             Console.WriteLine($"Loaded {_faceCascades.Count} cascade classifiers");
         }
 
-        public async Task<byte[]> AnonymizeFacesAsync(byte[] imageBytes, AnonymizationType anonymizationType)
-        {
-            return await Task.Run(() =>
-            {
-                return AnonymizeFaces(imageBytes, anonymizationType);
-            });
-        }
-
         public byte[] AnonymizeFaces(byte[] imageBytes, AnonymizationType anonymizationType)
         {
             try
             {
-                // Завантажуємо зображення з байтів
                 using var mat = Mat.FromImageData(imageBytes);
 
-                // Конвертуємо в сірий колір для детекції
                 using var grayMat = new Mat();
                 Cv2.CvtColor(mat, grayMat, ColorConversionCodes.BGR2GRAY);
 
-                // Детектуємо обличчя
                 var faces = DetectFaces(grayMat);
 
-                // Анонімізуємо кожне обличчя
                 foreach (var face in faces)
                 {
                     AnonymizeFace(mat, face, anonymizationType);
                 }
 
-                // Конвертуємо назад в байти
                 return mat.ToBytes(".jpg");
             }
             catch (Exception ex)
             {
-                // Логування помилки
                 Console.WriteLine($"Error in face anonymization: {ex.Message}");
-                // Повертаємо оригінальне зображення у випадку помилки
                 return imageBytes;
             }
         }
@@ -95,7 +79,6 @@ namespace Api.Services
         {
             var allFaces = new List<Rect>();
             
-            // Якщо каскади не завантажені, використовуємо тестову область
             if (_faceCascades.Count == 0)
             {
                 Console.WriteLine("No cascades loaded, using test face region");
@@ -112,7 +95,6 @@ namespace Api.Services
 
             try
             {
-                // Прогоняємо зображення через всі завантажені каскади
                 foreach (var cascade in _faceCascades)
                 {
                     if (cascade.Empty()) continue;
@@ -121,11 +103,11 @@ namespace Api.Services
                     {
                         var faces = cascade.DetectMultiScale(
                             grayImage,
-                            scaleFactor: 1.1,           // Коефіцієнт масштабування
-                            minNeighbors: 3,            // Мінімальна кількість сусідів
+                            scaleFactor: 1.1,
+                            minNeighbors: 3,
                             flags: HaarDetectionTypes.ScaleImage,
-                            minSize: new Size(30, 30),  // Мінімальний розмір обличчя
-                            maxSize: new Size(700, 700) // Максимальний розмір обличчя
+                            minSize: new Size(30, 30),
+                            maxSize: new Size(700, 700)
                         );
                         
                         allFaces.AddRange(faces);
@@ -137,7 +119,6 @@ namespace Api.Services
                     }
                 }
 
-                // Видаляємо дублікати та обличчя, що перекриваються
                 var uniqueFaces = RemoveOverlappingFaces(allFaces);
                 
                 Console.WriteLine($"Total unique faces detected: {uniqueFaces.Count}");
@@ -163,8 +144,7 @@ namespace Api.Services
                 
                 foreach (var existingFace in uniqueFaces)
                 {
-                    // Перевіряємо перекриття (якщо більше 50% площі перекривається)
-                    var intersection = face & existingFace; // Оператор перетину
+                    var intersection = face & existingFace;
                     var unionArea = face.Width * face.Height + existingFace.Width * existingFace.Height 
                                   - intersection.Width * intersection.Height;
                     
@@ -173,7 +153,7 @@ namespace Api.Services
                         double overlapRatio = (double)(intersection.Width * intersection.Height) / 
                                             Math.Min(face.Width * face.Height, existingFace.Width * existingFace.Height);
                         
-                        if (overlapRatio > 0.5) // 50% перекриття
+                        if (overlapRatio > 0.5)
                         {
                             isUnique = false;
                             break;
@@ -213,14 +193,11 @@ namespace Api.Services
         {
             try
             {
-                // Вирізаємо область обличчя
                 using var faceRegion = new Mat(image, faceRect);
                 
-                // Застосовуємо сильне розмиття
                 using var blurredFace = new Mat();
                 Cv2.GaussianBlur(faceRegion, blurredFace, new Size(99, 99), 0);
                 
-                // Копіюємо розмите обличчя назад
                 blurredFace.CopyTo(new Mat(image, faceRect));
             }
             catch (Exception ex)
@@ -233,18 +210,14 @@ namespace Api.Services
         {
             try
             {
-                // Вирізаємо область обличчя
                 using var faceRegion = new Mat(image, faceRect);
                 
-                // Зменшуємо розмір для піксельації
                 using var smallFace = new Mat();
                 Cv2.Resize(faceRegion, smallFace, new Size(20, 20), interpolation: InterpolationFlags.Nearest);
                 
-                // Збільшуємо назад до оригінального розміру
                 using var pixelatedFace = new Mat();
                 Cv2.Resize(smallFace, pixelatedFace, faceRect.Size, interpolation: InterpolationFlags.Nearest);
                 
-                // Копіюємо піксельоване обличчя назад
                 pixelatedFace.CopyTo(new Mat(image, faceRect));
             }
             catch (Exception ex)
@@ -257,7 +230,6 @@ namespace Api.Services
         {
             try
             {
-                // Заповнюємо область чорним кольором
                 Cv2.Rectangle(image, faceRect, Scalar.Black, -1);
             }
             catch (Exception ex)

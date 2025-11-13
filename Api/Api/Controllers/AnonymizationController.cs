@@ -42,8 +42,7 @@ namespace Api.Controllers
                 await image.CopyToAsync(memoryStream);
                 byte[] imageBytes = memoryStream.ToArray();
 
-                // Використовуємо сервіс для анонімізації облич
-                byte[] anonymizedImageBytes = await _faceAnonymizationService.AnonymizeFacesAsync(imageBytes, dto.Type);
+                byte[] anonymizedImageBytes = _faceAnonymizationService.AnonymizeFaces(imageBytes, dto.Type);
 
                 return File(anonymizedImageBytes, "image/jpeg");
             }
