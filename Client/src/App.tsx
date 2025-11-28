@@ -18,10 +18,13 @@ function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [anonymizedPictureSrc, setAnonymizedPictureSrc] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isAnonymizationFinishedSuccessful, setIsAnonymizationFinishedSuccessful] = useState<boolean>(false);
   const [anonymizationType, setAnonymizationType] = useState<AnonymizationTypeValue>(AnonymizationType.Blur);
   const [progress, setProgress] = useState<number>(0);
   const [sessionId] = useState<string>(() => crypto.randomUUID());
   const [connection, setConnection] = useState<signalR.HubConnection | null>(null);
+  const [anonymizedBlob, setAnonymizedBlob] = useState<Blob | null>(null);
+  const [fileExtension, setFileExtension] = useState<string>('jpg');
 
   const selectedFileUrl = useMemo(() => {
     if (!selectedFile) return noImagePlaceholder;
@@ -61,6 +64,19 @@ function App() {
     };
   }, [connection, sessionId]);
 
+  const downloadAnonymizedImage = () => {
+    if (!anonymizedBlob) return;
+
+    const url = URL.createObjectURL(anonymizedBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `anonymized_${Date.now()}.${fileExtension}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const anonymizePicture = async () => {
     if (!selectedFile) {
       alert("Please select a picture first.");
@@ -76,6 +92,9 @@ function App() {
       formData.append('type', anonymizationType.toString());
       formData.append('sessionId', sessionId);
 
+      const fileExt = selectedFile.name.split('.').pop() || 'jpg';
+      setFileExtension(fileExt);
+
       const response = await axios.post(`${url}anonymization`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -83,9 +102,10 @@ function App() {
         responseType: 'blob'
       });
 
+      setAnonymizedBlob(response.data);
       const anonymizedImageUrl = URL.createObjectURL(response.data);
       setAnonymizedPictureSrc(anonymizedImageUrl);
-      
+      setIsAnonymizationFinishedSuccessful(true);
     } catch (error) {
       console.error('Anonymization error:', error);
       alert('Error occurred while anonymizing the picture. Please try again.');
@@ -101,7 +121,7 @@ function App() {
         <Card.Img 
           variant="top" 
           src={selectedFileUrl} 
-          style={{ width: '400px', height: '289px', objectFit: 'cover' }}
+          style={{ width: '400px', height: '289px', objectFit: 'contain' }}
         />
           <Form.Label htmlFor="file-input" className="btn btn-primary w-100 mt-3 mb-0">
             Select picture to anonymize
@@ -116,6 +136,8 @@ function App() {
               if (file) {
                 setSelectedFile(file);
                 setAnonymizedPictureSrc("");
+                setAnonymizedBlob(null);
+                setIsAnonymizationFinishedSuccessful(false);
               }
             }}
           />
@@ -130,6 +152,8 @@ function App() {
             onChange={(e) => {
               setAnonymizationType(parseInt(e.target.value) as AnonymizationTypeValue);
               setAnonymizedPictureSrc("");
+              setAnonymizedBlob(null);
+              setIsAnonymizationFinishedSuccessful(false);
             }}
           >
             <option value={AnonymizationType.Blur}>Blur</option>
@@ -143,23 +167,34 @@ function App() {
         <Card.Img 
           variant="top" 
           src={anonymizedPictureSrc || noImagePlaceholder}
-          style={{ width: '400px', height: '289px', objectFit: 'cover' }}
-        />        
-        <Button
-          variant="primary"
-          className="mt-3 w-100"
-          onClick={anonymizePicture}
-          disabled={!selectedFile || isLoading}
-        >
-          {isLoading ? (
-            <>
-              <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-              {progress > 0 ? `Anonymizing (${progress}%)...` : 'Anonymizing...'}
-            </>
-          ) : (
-            `Anonymize with ${Object.keys(AnonymizationType)[Object.values(AnonymizationType).indexOf(anonymizationType)]}`
-          )}
-        </Button>
+          style={{ width: '400px', height: '289px', objectFit: 'contain' }}
+        />
+        {isAnonymizationFinishedSuccessful
+          ? <Button
+            variant="success"
+            className="mt-2 w-100"
+            onClick={downloadAnonymizedImage}
+            disabled={!anonymizedBlob}
+          >
+            Download Anonymized Image
+          </Button>
+
+          : <Button
+            variant="primary"
+            className="mt-3 w-100"
+            onClick={anonymizePicture}
+            disabled={!selectedFile || isLoading}
+          >
+            {isLoading ? (
+              <>
+                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                {progress > 0 ? `Anonymizing (${progress}%)...` : 'Anonymizing...'}
+              </>
+            ) : (
+              `Anonymize with ${Object.keys(AnonymizationType)[Object.values(AnonymizationType).indexOf(anonymizationType)]}`
+            )}
+          </Button>
+        }
       </Card>
     </div>
   )
