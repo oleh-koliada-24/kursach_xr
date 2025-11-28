@@ -1,5 +1,10 @@
 using Api.DTOs;
 using OpenCvSharp;
+using System.Drawing.Imaging;
+using AnimatedGif;
+using CvSize = OpenCvSharp.Size;
+using DrawingImage = System.Drawing.Image;
+using DrawingBitmap = System.Drawing.Bitmap;
 
 namespace Api.Services
 {
@@ -52,6 +57,22 @@ namespace Api.Services
 
         public byte[] AnonymizeFaces(byte[] imageBytes, AnonymizationType anonymizationType)
         {
+            if (IsGif(imageBytes))
+            {
+                return AnonymizeGif(imageBytes, anonymizationType);
+            }
+
+            return AnonymizeStaticImage(imageBytes, anonymizationType);
+        }
+
+        private bool IsGif(byte[] imageBytes)
+        {
+            if (imageBytes.Length < 3) return false;
+            return imageBytes[0] == 0x47 && imageBytes[1] == 0x49 && imageBytes[2] == 0x46;
+        }
+
+        private byte[] AnonymizeStaticImage(byte[] imageBytes, AnonymizationType anonymizationType)
+        {
             try
             {
                 using var mat = Mat.FromImageData(imageBytes);
@@ -73,6 +94,113 @@ namespace Api.Services
                 Console.WriteLine($"Error in face anonymization: {ex.Message}");
                 return imageBytes;
             }
+        }
+
+        private byte[] AnonymizeGif(byte[] gifBytes, AnonymizationType anonymizationType)
+        {
+            try
+            {
+                using var inputStream = new MemoryStream(gifBytes);
+                using var gifImage = DrawingImage.FromStream(inputStream) as DrawingBitmap;
+
+                if (gifImage == null)
+                {
+                    Console.WriteLine("Failed to load GIF image");
+                    return gifBytes;
+                }
+
+                var dimension = new FrameDimension(gifImage.FrameDimensionsList[0]);
+                int frameCount = gifImage.GetFrameCount(dimension);
+
+                Console.WriteLine($"Processing GIF with {frameCount} frames");
+
+                var tempPath = Path.Combine(Path.GetTempPath(), $"temp_gif_{Guid.NewGuid()}.gif");
+                
+                try
+                {
+                    int delay = GetGifDelay(gifImage);
+                    
+                    using (var gif = AnimatedGif.AnimatedGif.Create(tempPath, delay))
+                    {
+                        for (int i = 0; i < frameCount; i++)
+                        {
+                            gifImage.SelectActiveFrame(dimension, i);
+
+                            using var frameBitmap = new DrawingBitmap(gifImage);
+                            var anonymizedFrame = AnonymizeFrame(frameBitmap, anonymizationType);
+                            
+                            gif.AddFrame(anonymizedFrame, delay: delay, quality: GifQuality.Bit8);
+                            
+                            anonymizedFrame.Dispose();
+                            
+                            Console.WriteLine($"Processed frame {i + 1}/{frameCount}");
+                        }
+                    }
+
+                    var resultBytes = File.ReadAllBytes(tempPath);
+                    File.Delete(tempPath);
+                    return resultBytes;
+                }
+                catch
+                {
+                    if (File.Exists(tempPath))
+                        File.Delete(tempPath);
+                    throw;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GIF anonymization: {ex.Message}");
+                return gifBytes;
+            }
+        }
+
+        private DrawingBitmap AnonymizeFrame(DrawingBitmap frame, AnonymizationType anonymizationType)
+        {
+            try
+            {
+                using var frameStream = new MemoryStream();
+                frame.Save(frameStream, ImageFormat.Png);
+                byte[] frameBytes = frameStream.ToArray();
+
+                using var mat = Mat.FromImageData(frameBytes);
+                using var grayMat = new Mat();
+                Cv2.CvtColor(mat, grayMat, ColorConversionCodes.BGR2GRAY);
+
+                var faces = DetectFaces(grayMat);
+
+                foreach (var face in faces)
+                {
+                    AnonymizeFace(mat, face, anonymizationType);
+                }
+
+                byte[] processedBytes = mat.ToBytes(".png");
+                using var processedStream = new MemoryStream(processedBytes);
+                return new DrawingBitmap(processedStream);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error anonymizing frame: {ex.Message}");
+                return new DrawingBitmap(frame);
+            }
+        }
+
+        private int GetGifDelay(DrawingBitmap gifImage)
+        {
+            try
+            {
+                var delayProperty = gifImage.GetPropertyItem(0x5100);
+                if (delayProperty != null && delayProperty.Value != null && delayProperty.Value.Length >= 4)
+                {
+                    int delay = BitConverter.ToInt32(delayProperty.Value, 0) * 10;
+                    return delay > 0 ? delay : 100;
+                }
+            }
+            catch
+            {
+            }
+            
+            return 100;
         }
 
         private Rect[] DetectFaces(Mat grayImage)
@@ -106,8 +234,8 @@ namespace Api.Services
                             scaleFactor: 1.1,
                             minNeighbors: 3,
                             flags: HaarDetectionTypes.ScaleImage,
-                            minSize: new Size(30, 30),
-                            maxSize: new Size(700, 700)
+                            minSize: new CvSize(30, 30),
+                            maxSize: new CvSize(700, 700)
                         );
                         
                         allFaces.AddRange(faces);
@@ -196,7 +324,7 @@ namespace Api.Services
                 using var faceRegion = new Mat(image, faceRect);
                 
                 using var blurredFace = new Mat();
-                Cv2.GaussianBlur(faceRegion, blurredFace, new Size(99, 99), 0);
+                Cv2.GaussianBlur(faceRegion, blurredFace, new CvSize(99, 99), 0);
                 
                 blurredFace.CopyTo(new Mat(image, faceRect));
             }
@@ -213,7 +341,7 @@ namespace Api.Services
                 using var faceRegion = new Mat(image, faceRect);
                 
                 using var smallFace = new Mat();
-                Cv2.Resize(faceRegion, smallFace, new Size(20, 20), interpolation: InterpolationFlags.Nearest);
+                Cv2.Resize(faceRegion, smallFace, new CvSize(20, 20), interpolation: InterpolationFlags.Nearest);
                 
                 using var pixelatedFace = new Mat();
                 Cv2.Resize(smallFace, pixelatedFace, faceRect.Size, interpolation: InterpolationFlags.Nearest);
