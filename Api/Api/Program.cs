@@ -11,6 +11,7 @@ namespace Api
 
             builder.Services.AddControllers();
             builder.Services.AddScoped<Api.Services.IFaceAnonymizationService, Api.Services.FaceAnonymizationService>();
+            builder.Services.AddSignalR();
             
             builder.Services.AddCors(options =>
             {
@@ -18,7 +19,8 @@ namespace Api
                 {
                     policy.WithOrigins("http://localhost:5173")
                         .AllowAnyHeader()
-                        .AllowAnyMethod();
+                        .AllowAnyMethod()
+                        .AllowCredentials();
                 });
             });
 
@@ -35,6 +37,7 @@ namespace Api
 
             app.UseCors();
             app.MapControllers();
+            app.MapHub<Api.Hubs.AnonymizationHub>("/anonymizationHub");
 
             app.Run();
         }

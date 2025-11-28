@@ -2,6 +2,8 @@ using Api.DTOs;
 using OpenCvSharp;
 using System.Drawing.Imaging;
 using AnimatedGif;
+using Microsoft.AspNetCore.SignalR;
+using Api.Hubs;
 using CvSize = OpenCvSharp.Size;
 using DrawingImage = System.Drawing.Image;
 using DrawingBitmap = System.Drawing.Bitmap;
@@ -10,12 +12,13 @@ namespace Api.Services
 {
     public interface IFaceAnonymizationService
     {
-        byte[] AnonymizeFaces(byte[] imageBytes, AnonymizationType anonymizationType);
+        byte[] AnonymizeFaces(byte[] imageBytes, AnonymizationType anonymizationType, string? sessionId = null);
     }
 
     public class FaceAnonymizationService : IFaceAnonymizationService
     {
         private readonly List<CascadeClassifier> _faceCascades;
+        private readonly IHubContext<AnonymizationHub> _hubContext;
         private readonly string[] _cascadeFiles = new[]
         {
             "haarcascade_frontalface_alt.xml",
@@ -24,8 +27,9 @@ namespace Api.Services
             "haarcascade_profileface.xml"
         };
 
-        public FaceAnonymizationService()
+        public FaceAnonymizationService(IHubContext<AnonymizationHub> hubContext)
         {
+            _hubContext = hubContext;
             _faceCascades = new List<CascadeClassifier>();
             
             var modelsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Models");
@@ -55,11 +59,11 @@ namespace Api.Services
             Console.WriteLine($"Loaded {_faceCascades.Count} cascade classifiers");
         }
 
-        public byte[] AnonymizeFaces(byte[] imageBytes, AnonymizationType anonymizationType)
+        public byte[] AnonymizeFaces(byte[] imageBytes, AnonymizationType anonymizationType, string? sessionId = null)
         {
             if (IsGif(imageBytes))
             {
-                return AnonymizeGif(imageBytes, anonymizationType);
+                return AnonymizeGif(imageBytes, anonymizationType, sessionId);
             }
 
             return AnonymizeStaticImage(imageBytes, anonymizationType);
@@ -96,7 +100,7 @@ namespace Api.Services
             }
         }
 
-        private byte[] AnonymizeGif(byte[] gifBytes, AnonymizationType anonymizationType)
+        private byte[] AnonymizeGif(byte[] gifBytes, AnonymizationType anonymizationType, string? sessionId = null)
         {
             try
             {
@@ -133,7 +137,14 @@ namespace Api.Services
                             
                             anonymizedFrame.Dispose();
                             
-                            Console.WriteLine($"Processed frame {i + 1}/{frameCount}");
+                            int currentFrame = i + 1;
+                            int percentage = (int)((double)currentFrame / frameCount * 100);
+                            Console.WriteLine($"Processed frame {currentFrame}/{frameCount} ({percentage}%)");
+                            
+                            if (!string.IsNullOrEmpty(sessionId))
+                            {
+                                _hubContext.Clients.All.SendAsync("ReceiveProgress", sessionId, currentFrame, frameCount, percentage).Wait();
+                            }
                         }
                     }
 

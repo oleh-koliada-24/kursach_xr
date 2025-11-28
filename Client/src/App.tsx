@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button, Card, Form } from "react-bootstrap";
 import axios from "axios";
+import * as signalR from "@microsoft/signalr";
 
 const url = 'http://localhost:5245/api/';
 const noImagePlaceholder = "src/assets/no-image-placeholder.png";
@@ -18,6 +19,42 @@ function App() {
   const [anonymizedPictureSrc, setAnonymizedPictureSrc] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [anonymizationType, setAnonymizationType] = useState<AnonymizationTypeValue>(AnonymizationType.Blur);
+  const [progress, setProgress] = useState<number>(0);
+  const [sessionId] = useState<string>(() => crypto.randomUUID());
+  const [connection, setConnection] = useState<signalR.HubConnection | null>(null);
+
+  useEffect(() => {
+    const newConnection = new signalR.HubConnectionBuilder()
+      .withUrl("http://localhost:5245/anonymizationHub")
+      .withAutomaticReconnect()
+      .build();
+
+    setConnection(newConnection);
+  }, []);
+
+  useEffect(() => {
+    if (connection) {
+      connection
+        .start()
+        .then(() => {
+          console.log("SignalR Connected!");
+
+          connection.on("ReceiveProgress", (sid: string, current: number, total: number, percentage: number) => {
+            if (sid === sessionId) {
+              setProgress(percentage);
+              console.log(`Progress: ${current}/${total} (${percentage}%)`);
+            }
+          });
+        })
+        .catch((err) => console.error("SignalR Connection Error: ", err));
+    }
+
+    return () => {
+      if (connection) {
+        connection.stop();
+      }
+    };
+  }, [connection, sessionId]);
 
   const anonymizePicture = async () => {
     if (!selectedFile) {
@@ -26,11 +63,13 @@ function App() {
     }
 
     setIsLoading(true);
+    setProgress(0);
     
     try {
       const formData = new FormData();
       formData.append('image', selectedFile);
       formData.append('type', anonymizationType.toString());
+      formData.append('sessionId', sessionId);
 
       const response = await axios.post(`${url}anonymization`, formData, {
         headers: {
@@ -47,6 +86,7 @@ function App() {
       alert('Error occurred while anonymizing the picture. Please try again.');
     } finally {
       setIsLoading(false);
+      setProgress(0);
     }
   };
 
@@ -99,7 +139,7 @@ function App() {
           variant="top" 
           src={anonymizedPictureSrc || noImagePlaceholder}
           style={{ width: '400px', height: '289px', objectFit: 'cover' }}
-        />
+        />        
         <Button
           variant="primary"
           className="mt-3 w-100"
@@ -109,7 +149,7 @@ function App() {
           {isLoading ? (
             <>
               <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-              Anonymizing...
+              {progress > 0 ? `Anonymizing (${progress}%)...` : 'Anonymizing...'}
             </>
           ) : (
             `Anonymize with ${Object.keys(AnonymizationType)[Object.values(AnonymizationType).indexOf(anonymizationType)]}`

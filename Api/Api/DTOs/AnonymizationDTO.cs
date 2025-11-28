@@ -11,5 +11,6 @@
     {
         public IFormFile? Image { get; set; }
         public AnonymizationType Type { get; set; }
+        public string? SessionId { get; set; }
     }
 }

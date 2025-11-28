@@ -42,9 +42,11 @@ namespace Api.Controllers
                 await image.CopyToAsync(memoryStream);
                 byte[] imageBytes = memoryStream.ToArray();
 
-                byte[] anonymizedImageBytes = _faceAnonymizationService.AnonymizeFaces(imageBytes, dto.Type);
+                var sessionId = dto.SessionId ?? Guid.NewGuid().ToString();
+                byte[] anonymizedImageBytes = _faceAnonymizationService.AnonymizeFaces(imageBytes, dto.Type, sessionId);
 
-                return File(anonymizedImageBytes, "image/jpeg");
+                var contentType = image.ContentType.ToLower().Contains("gif") ? "image/gif" : "image/jpeg";
+                return File(anonymizedImageBytes, contentType);
             }
             catch (Exception)
             {
