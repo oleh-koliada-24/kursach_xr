@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button, Card, Form } from "react-bootstrap";
 import axios from "axios";
 import * as signalR from "@microsoft/signalr";
@@ -22,6 +22,11 @@ function App() {
   const [progress, setProgress] = useState<number>(0);
   const [sessionId] = useState<string>(() => crypto.randomUUID());
   const [connection, setConnection] = useState<signalR.HubConnection | null>(null);
+
+  const selectedFileUrl = useMemo(() => {
+    if (!selectedFile) return noImagePlaceholder;
+    return URL.createObjectURL(selectedFile);
+  }, [selectedFile]);
 
   useEffect(() => {
     const newConnection = new signalR.HubConnectionBuilder()
@@ -95,7 +100,7 @@ function App() {
       <Card className="p-3 d-flex flex-column align-items-center">
         <Card.Img 
           variant="top" 
-          src={selectedFile ? URL.createObjectURL(selectedFile) : noImagePlaceholder} 
+          src={selectedFileUrl} 
           style={{ width: '400px', height: '289px', objectFit: 'cover' }}
         />
           <Form.Label htmlFor="file-input" className="btn btn-primary w-100 mt-3 mb-0">
